@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Download, Settings, Database, Server, Cpu } from 'lucide-react';
+import { Search, Play, Download, Settings, Database, Server, Cpu, Mail, Bell } from 'lucide-react';
 import { Terminal } from './components/Terminal';
 import { GrantCard } from './components/GrantCard';
 import { Grant, LogEntry, SearchConfig } from './types';
 import { discoverGrants } from './services/gemini';
+import { sendNotification } from './services/notification';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function App() {
   const [config, setConfig] = useState<SearchConfig>({
     keywords: ['grant application', 'call for proposals', 'research funding', 'tech innovation grant'],
     year: new Date().getFullYear(),
+    emailRecipient: '',
+    notificationEnabled: false
   });
   const [isScanning, setIsScanning] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -23,12 +26,14 @@ export default function App() {
   }, []);
 
   const addLog = (message: string, level: LogEntry['level'] = 'INFO') => {
-    setLogs(prev => [...prev, {
+    const entry = {
       id: uuidv4(),
       timestamp: new Date().toLocaleTimeString(),
       level,
       message,
-    }]);
+    };
+    setLogs(prev => [...prev, entry]);
+    return entry; // Return for immediate use if needed
   };
 
   const handleRunDiscovery = async () => {
@@ -44,21 +49,32 @@ export default function App() {
     addLog('Starting new discovery sequence...', 'INFO');
 
     try {
+      // 1. Discovery Phase
       const results = await discoverGrants(config, (log) => {
-        // Wrapper to add logs from the service
         setLogs(prev => [...prev, log]);
       });
       
+      // 2. Deduplication Phase
+      let newGrants: Grant[] = [];
       setGrants(prev => {
-        // Simple de-duplication based on title
         const existingTitles = new Set(prev.map(g => g.program_title.toLowerCase()));
-        const newGrants = results.filter(g => !existingTitles.has(g.program_title.toLowerCase()));
+        const uniqueResults = results.filter(g => !existingTitles.has(g.program_title.toLowerCase()));
+        newGrants = uniqueResults;
         
-        if (newGrants.length < results.length) {
-            addLog(`Filtered ${results.length - newGrants.length} duplicates.`, 'WARNING');
+        if (uniqueResults.length < results.length) {
+            addLog(`Filtered ${results.length - uniqueResults.length} duplicates.`, 'WARNING');
         }
-        return [...newGrants, ...prev];
+        return [...uniqueResults, ...prev];
       });
+
+      // 3. Notification Phase
+      if (newGrants.length > 0 && config.notificationEnabled && config.emailRecipient) {
+        await sendNotification(config.emailRecipient, newGrants, (log) => {
+             setLogs(prev => [...prev, log]);
+        });
+      } else if (newGrants.length > 0 && (!config.notificationEnabled || !config.emailRecipient)) {
+        addLog('Skipping email notification (Disabled or no recipient).', 'INFO');
+      }
 
     } catch (error) {
       console.error(error);
@@ -128,8 +144,10 @@ export default function App() {
                     <span className="text-white font-mono text-lg">{grants.length}</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-gray-500 text-xs">Latency</span>
-                    <span className="text-gray-400 font-mono">~1.2s</span>
+                    <span className="text-gray-500 text-xs">Notifications</span>
+                    <span className={config.notificationEnabled ? "text-green-400 font-mono" : "text-gray-500 font-mono"}>
+                        {config.notificationEnabled ? "ON" : "OFF"}
+                    </span>
                 </div>
              </div>
           </div>
@@ -137,7 +155,7 @@ export default function App() {
           {/* Config Panel */}
           <div>
             <h2 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                <Settings size={14} /> Search Configuration
+                <Settings size={14} /> Search Config
             </h2>
             
             <div className="space-y-3">
@@ -165,6 +183,39 @@ export default function App() {
                         </span>
                     ))}
                 </div>
+            </div>
+          </div>
+
+          {/* Notification Config */}
+          <div>
+             <h2 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                <Bell size={14} /> Notifications
+            </h2>
+            <div className="space-y-3 bg-gray-950 p-3 rounded border border-gray-800">
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="checkbox" 
+                        id="notify" 
+                        checked={config.notificationEnabled}
+                        onChange={(e) => setConfig(prev => ({...prev, notificationEnabled: e.target.checked}))}
+                        className="rounded bg-gray-800 border-gray-700 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="notify" className="text-sm text-gray-300">Email Alerts</label>
+                </div>
+                {config.notificationEnabled && (
+                    <div className="animate-in fade-in slide-in-from-top-1">
+                        <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-2">
+                            <Mail size={14} className="text-gray-500" />
+                            <input 
+                                type="email" 
+                                value={config.emailRecipient}
+                                onChange={(e) => setConfig(prev => ({...prev, emailRecipient: e.target.value}))}
+                                placeholder="name@example.com"
+                                className="w-full bg-transparent py-2 text-sm text-white placeholder-gray-500 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
           </div>
         </div>

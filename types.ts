@@ -23,4 +23,6 @@ export interface LogEntry {
 export interface SearchConfig {
   keywords: string[];
   year: number;
+  emailRecipient: string;
+  notificationEnabled: boolean;
 }
