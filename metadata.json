@@ -1,0 +1,5 @@
+{
+  "name": "GrantHunter Bot",
+  "description": "A production-ready AI grant discovery engine that autonomously searches, crawls, and extracts funding opportunities using Gemini Search Grounding.",
+  "requestFramePermissions": []
+}
