@@ -118,8 +118,8 @@ export default function App() {
                 <Database className="text-white" size={24} />
              </div>
              <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">GrantHunter</h1>
-                <p className="text-xs text-gray-500 font-mono">AI DISCOVERY ENGINE</p>
+                <h1 className="text-xl font-bold text-white tracking-tight">Grant_Crawler</h1>
+                <p className="text-xs text-gray-500 font-mono">A product by Innovation</p>
              </div>
           </div>
         </div>
